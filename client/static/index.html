@@ -1,0 +1,43 @@
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <link rel="stylesheet" href="main.css"></link>
+    </head>
+    <body>   
+        <header class="title">Play Tello With Joystick</header>
+        <section id="mainSection" class="main-section">
+            <div class="controls-area">
+                <div class="controls">
+                    <div id="connect" class="ctlButton">connect</div>
+                    <div id="takeoff" class="ctlButton">takeoff</div>
+                    <div id="land" class="ctlButton">land</div>
+                    <div id="videoOn" class="ctlButton">videoOn</div>
+                    <div id="videoOff" class="ctlButton">videoOff</div>
+                    <div id="disconnect" class="ctlButton danger">disconnect</div>
+                </div>
+            </div>
+
+            <div id="videoEmpty" class="video-empty">
+            </div>
+            <div id="videoContainer" class="videoContainer">
+                <video id="video" autoplay="true" playsinline="true"></video>
+            </div>
+
+            <div class="joystick-area">
+                <div class="joysticks">
+                    <div class="container">
+                        <canvas id="zrCanvas" class="joystick-ui" ></canvas>
+                        <div id="currentCoordinateZr" class="coord"></div>
+                    </div>
+                    <div class="container">
+                        <canvas id="xyCanvas" class="joystick-ui"></canvas>
+                        <div id="currentCoordinateXy" class="coord"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <script src="joystick.js"></script>
+        <script src="main.js"></script>
+    </body>
+</html>
