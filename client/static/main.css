@@ -1,0 +1,117 @@
+@charset 'utf-8';
+
+html,
+body {
+    padding: 0;
+    margin: 0;
+}
+
+html {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+}
+
+body {
+    color: #54636e;
+    font-size: 16px;
+    font-family: 'Meiryo', 'Meiryo UI', 'Yu Gothic', 'YuGothic', sans-serif;
+    background-color: rgb(221, 219, 219);
+}
+
+.title {
+    width: 100%;
+    height: 5%;
+    font-size: 24px;
+    line-height: 1.5;
+    text-align: center;
+    font-weight: bold;
+}
+
+.main-section {
+    position: relative;
+    margin: auto;
+}
+
+.controls-area {
+    position: absolute;
+    top: 12px;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+}
+
+.controls {
+    max-width: 648px;
+    margin: auto;
+    overflow: hidden;
+}
+
+.ctlButton {
+    float: left;
+    line-height: 1.5;
+    border: 1px solid #54636e;
+    border-radius: 2px;
+    text-align: center;
+    margin-right: 8px;
+    padding: 0 8px;
+    min-width: 80px;
+    box-shadow: 1px 1px 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+.ctlButton.enabled.danger {
+    background: rgba(212, 135, 135, 0.7);
+}
+
+.ctlButton.enabled {
+    background: rgba(66, 172, 203, 0.7);
+    cursor: pointer;
+}
+
+.ctlButton.enabled:hover {
+    opacity: 0.7;
+}
+
+.ctlButton.disabled {
+    background-color: rgb(196, 193, 193);
+}
+
+.video-empty {
+    width: 100%;
+    margin: auto;
+    text-align: center;
+    line-height: 1;
+}
+
+.joystick-area {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100;
+}
+
+.joysticks {
+    margin: auto;
+    width: 80%;
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+
+.container {
+    float: left;
+    width: 50%;
+}
+
+.joystick-ui {
+    margin: auto;
+    width: 200px;
+    height: 200px;
+    display: block;
+}
+
+.coord {
+    width: 100%;
+    text-align: center;
+    display: none;
+}
