@@ -47,7 +47,7 @@ $disconnect.addEventListener('click', async event => {
     if (!confirm(msg)) {
         return;
     }
-
+    state = STATE.DISCONNECTED;
     changeButtonStateOnDisconnect();
     await simpleAccess('/disconnect');
 });
@@ -264,9 +264,9 @@ function createPeerConnection() {
         if (event.track.kind === 'video') {
             display($videoEmpty, false);
             display($videoContainer, true);
-            $video.onloadedmetadata = async () => {
+            $video.onloadedmetadata = () => {
                 resizeVideo();
-                await simpleAccess('/requestH264Params');
+                console.debug('Video metadata loaded.')
             };
             $video.srcObject = event.streams[0];
         }          

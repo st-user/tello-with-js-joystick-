@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
 	"gobot.io/x/gobot"
@@ -18,6 +19,7 @@ import (
 
 var drone *tello.Driver
 var videoFrameChannel chan []byte
+var rtcEventLoopStopChannel chan struct{}
 
 func loadFileByName(filename string) string {
 	path := filepath.Join("client", "static", filename)
@@ -55,8 +57,8 @@ func connect(w http.ResponseWriter, r *http.Request) {
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
 			fmt.Println("Starts receiving video frames from your drone.")
 			drone.StartVideo()
-			drone.SetVideoEncoderRate(tello.VideoBitRateAuto)
-			gobot.Every(3*time.Second, func() {
+			drone.SetVideoEncoderRate(tello.VideoBitRate4M)
+			gobot.Every(10*time.Second, func() {
 				drone.StartVideo()
 			})
 		})
@@ -146,6 +148,7 @@ func disconnect(w http.ResponseWriter, r *http.Request) {
 func offer(w http.ResponseWriter, r *http.Request) {
 
 	videoFrameChannel = make(chan []byte)
+	rtcEventLoopStopChannel = make(chan struct{})
 
 	offerSdp := webrtc.SessionDescription{}
 	err := json.NewDecoder(r.Body).Decode(&offerSdp)
@@ -168,11 +171,80 @@ func offer(w http.ResponseWriter, r *http.Request) {
 		writeErr(err)
 		return
 	}
-	_, err = rtcPeerConnection.AddTrack(videoTrack)
+	rtpSender, err := rtcPeerConnection.AddTrack(videoTrack)
 	if err != nil {
 		writeErr(err)
 		return
 	}
+
+	go func() {
+		rtcpBuf := make([]byte, 1500)
+
+		select {
+		case <-rtcEventLoopStopChannel:
+			log.Println("Stops WebRTC event loop.")
+			return
+		default:
+			for {
+				n, _, rtcpErr := rtpSender.Read(rtcpBuf)
+				if rtcpErr != nil {
+					return
+				}
+				rtcpPacket := rtcpBuf[:n]
+
+				/*
+					payloadType := rtcpPacket[1]
+					if payloadType == 206 {
+						log.Printf("rtcp detail %v %v", pkts, rtcpPacket)
+						// 'R' 'E' 'M' 'B' = 82 69 77 66
+					}*/
+
+				pkts, err := rtcp.Unmarshal(rtcpPacket)
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				for _, pkt := range pkts {
+					var _p interface{} = pkt
+
+					// log.Printf(" -----  %T %v", _p, _p)
+
+					switch _pkt := _p.(type) {
+					case *rtcp.PictureLossIndication:
+						log.Printf("Receives RTCP PictureLossIndication. %v", _pkt)
+						drone.StartVideo()
+
+					case *rtcp.ReceiverEstimatedMaximumBitrate:
+						log.Printf("Receives RTCP ReceiverEstimatedMaximumBitrate. %v", _pkt)
+						// Reference: github.com/pion/rtcp receiver_estimated_maximum_bitrate.go
+						bitrate := float64(_pkt.Bitrate)
+						bitrateMB := bitrate / 1000.0 / 1000.0 // :MB
+						var changeTo float64
+
+						switch {
+						case bitrateMB >= 4.0:
+							drone.SetVideoEncoderRate(tello.VideoBitRate4M)
+							changeTo = 4.0
+						case bitrateMB >= 3.0:
+							drone.SetVideoEncoderRate(tello.VideoBitRate3M)
+							changeTo = 3.0
+						case bitrateMB >= 2.0:
+							drone.SetVideoEncoderRate(tello.VideoBitRate2M)
+							changeTo = 2.0
+						case bitrateMB >= 1.5:
+							drone.SetVideoEncoderRate(tello.VideoBitRate15M)
+							changeTo = 1.5
+						default:
+							drone.SetVideoEncoderRate(tello.VideoBitRate1M)
+							changeTo = 1
+						}
+						log.Printf("ReceiverEstimation = %.2f MB. Change to %v MB", bitrateMB, changeTo)
+					}
+				}
+			}
+		}
+	}()
 
 	rtcPeerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		log.Printf("Connection State has changed %s \n", connectionState.String())
@@ -202,6 +274,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 
 			frame, ok := <-videoFrameChannel
 			if !ok {
+				rtcPeerConnection.Close()
 				log.Println("The channel for video frames is closed.")
 				return
 			}
@@ -220,14 +293,9 @@ func offer(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func requestH264Params(w http.ResponseWriter, r *http.Request) {
-	checkThenAct(w, func() {
-		drone.StartVideo()
-	})
-}
-
 func videoOff(w http.ResponseWriter, r *http.Request) {
 	close(videoFrameChannel)
+	close(rtcEventLoopStopChannel)
 }
 
 func moveXy(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +339,6 @@ func main() {
 	http.HandleFunc("/disconnect", disconnect)
 	http.HandleFunc("/videoOff", videoOff)
 	http.HandleFunc("/offer", offer)
-	http.HandleFunc("/requestH264Params", requestH264Params)
 	http.HandleFunc("/moveXy", moveXy)
 	http.HandleFunc("/moveZr", moveZr)
 
