@@ -42,7 +42,7 @@ body {
 }
 
 .controls {
-    max-width: 660px;
+    max-width: 648px;
     margin: auto;
     overflow: hidden;
 }
@@ -55,7 +55,7 @@ body {
     text-align: center;
     margin-right: 8px;
     padding: 0 8px;
-    min-width: 80px;
+    min-width: 78px;
     box-shadow: 1px 1px 1px 1px rgba(0, 0, 0, 0.2);
 }
 
