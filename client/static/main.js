@@ -1,4 +1,4 @@
-/* global xyJoyStickUI, zrJoyStickUI */
+/* global ZrJoyStickUI, XyJoyStickUI */
 
 const $connect = document.querySelector('#connect');
 const $takeoff = document.querySelector('#takeoff');
@@ -96,18 +96,10 @@ window.addEventListener('resize', resizeVideo);
 /*
  * Events triggered by controlling the joysticks defined in 'joystick.js'
  */
-xyJoyStickUI.onmove(data => {
-    const coords = data.coords;
-    xyCoordToSend = {
-        x: coords.inUI.x / xyJoyStickUI.radius,
-        y: coords.inUI.y / xyJoyStickUI.radius
-    }; 
+const zrJoyStickUI = new ZrJoyStickUI({
+    selector: '#zrCanvas',
+    radius: 100
 });
-xyJoyStickUI.onend(() => {
-    xyCoordToSend = undefined;
-    sendJoystickXy({ x: 0, y: 0 });
-});
-
 zrJoyStickUI.onmove(data => {
     const coords = data.coords;
     zrCoordToSend = {
@@ -119,6 +111,24 @@ zrJoyStickUI.onend(() => {
     zrCoordToSend = undefined;
     sendJoystickZr({ z: 0, r: 0 });
 });
+zrJoyStickUI.drawBase(false);
+
+const xyJoyStickUI = new XyJoyStickUI({
+    selector: '#xyCanvas',
+    radius: 100
+});
+xyJoyStickUI.onmove(data => {
+    const coords = data.coords;
+    xyCoordToSend = {
+        x: coords.inUI.x / xyJoyStickUI.radius,
+        y: coords.inUI.y / xyJoyStickUI.radius
+    }; 
+});
+xyJoyStickUI.onend(() => {
+    xyCoordToSend = undefined;
+    sendJoystickXy({ x: 0, y: 0 });
+});
+xyJoyStickUI.drawBase(false);
 
 /*
  * Initialize contents.

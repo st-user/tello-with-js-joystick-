@@ -1,25 +1,23 @@
 /*
- * Utility functions
- */
-function rotate(x, y, theta) {
-    return {
-        x: Math.cos(theta) * x - Math.sin(theta) * y,
-        y: Math.sin(theta) * x + Math.cos(theta) * y
-    };
-}
-
-function round(val, scale = 10) {
-    return Math.round(val * scale) / scale;
-}
-
-/*
  * The class provides the functionality for detecting the selected coordinate on a joystick area.
  */
 class JoyStickUI {
 
     constructor(params) {
+
+        const COLOR = {
+            BG: 'rgba(66, 172, 203, 0.5)',
+            ICON: 'rgba(204, 49, 74, 0.8)',
+            CIRCLE: 'rgba(204, 49, 74, 0.3)'
+        };
+
         const _canvasSelector = params.selector;
-        const _radius = params.radius || JoyStickUI.DEFAULT_RADIUS;
+        const _radius = params.radius || 150;
+        const _styles = params.styles || {};
+        _styles.pointerRadius = _styles.pointerRadius || _radius * 0.4;
+        _styles.bg = _styles.bg || COLOR.BG;
+        _styles.icon = _styles.icon || COLOR.ICON;
+        _styles.circle = _styles.circle || COLOR.CIRCLE;
 
         const $canvas = document.querySelector(_canvasSelector);
         $canvas.width = _radius * 2;
@@ -30,6 +28,7 @@ class JoyStickUI {
         this.$canvas = $canvas;
         this.center = canvasCenter;
         this.radius = _radius;
+        this.styles = _styles;
         this._isMousedown = false;
         this._onstartHandlers = [];
         this._onmoveHandlers = [];
@@ -53,6 +52,8 @@ class JoyStickUI {
                 return;
             }
             self._isMousedown = false;
+
+            self.drawBase(false);
             self._onendHandlers.forEach(h => {
                 h.call(self);
             });
@@ -93,6 +94,9 @@ class JoyStickUI {
                 distance = Math.sqrt(coordX*coordX + coordY*coordY);
             }
         
+            self.drawBase(true);
+            self.drawPointer(coordX, coordY);
+
             self._onmoveHandlers.forEach(h => {
                 h.call(self, { 
                     coords: {
@@ -143,57 +147,119 @@ class JoyStickUI {
         this._onendHandlers.push(handler);
         return this;
     }
-}
-JoyStickUI.DEFAULT_RADIUS = 150;
 
-function drawCircle($canvas, center, maxDistance, radius, coordX, coordY, fillStyle) {
-    const ctx = $canvas.getContext('2d');
-    ctx.fillStyle = fillStyle;
+    /* methods for drawing */
 
-    let circleCenterCoordX = coordX;
-    let circleCenterCoordY = coordY;
-    const distance = Math.sqrt(coordX * coordX + coordY * coordY);
+    drawBase(omitPointer) {
+        this._drawBase();
 
-    if (maxDistance < distance + radius) {
-        const distanceToCenter = maxDistance - radius;
-        circleCenterCoordX = coordX * distanceToCenter / distance;
-        circleCenterCoordY = coordY * distanceToCenter / distance;
+        if (!omitPointer) {
+            this.drawPointer(0, 0);
+        }
     }
-    const circleCenterX = center.x + circleCenterCoordX;
-    const circleCenterY = center.y - circleCenterCoordY;
 
-    ctx.beginPath();
-    ctx.arc(circleCenterX, circleCenterY, radius, 0, Math.PI * 2);
-    ctx.closePath();
-    ctx.fill();
+    _drawBase() {
+        const $canvas = this.$canvas;
+        const center = this.center;
+        const circleFillStyle = this.styles.bg;
+
+        const ctx = $canvas.getContext('2d');
+        const width = $canvas.width;
+        const height = $canvas.height;
+        const gradient = ctx.createRadialGradient(
+            center.x, center.y, 0,
+            center.x, center.y, width / 2,
+        );
+        gradient.addColorStop(0, circleFillStyle);
+        gradient.addColorStop(0.9, circleFillStyle);
+        gradient.addColorStop(1, 'white');
+        ctx.fillStyle = gradient;
+    
+        ctx.clearRect(0, 0, width, height);
+        ctx.lineWidth = 1;
+    
+        ctx.beginPath();
+        ctx.arc(center.x, center.y, width / 2, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    drawPointer(coordX, coordY) {
+        const $canvas = this.$canvas;
+        const center = this.center;
+        const fillStyle = this.styles.circle;
+        const maxDistance = this.radius;
+        const radius = this.styles.pointerRadius;
+
+        const ctx = $canvas.getContext('2d');
+        ctx.fillStyle = fillStyle;
+    
+        let circleCenterCoordX = coordX;
+        let circleCenterCoordY = coordY;
+        const distance = Math.sqrt(coordX * coordX + coordY * coordY);
+    
+        if (maxDistance < distance + radius) {
+            const distanceToCenter = maxDistance - radius;
+            circleCenterCoordX = coordX * distanceToCenter / distance;
+            circleCenterCoordY = coordY * distanceToCenter / distance;
+        }
+        const circleCenterX = center.x + circleCenterCoordX;
+        const circleCenterY = center.y - circleCenterCoordY;
+    
+        ctx.beginPath();
+        ctx.arc(circleCenterX, circleCenterY, radius, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    drawDirectionIcon(x, y, length, rotationRadius = 0) {
+        const $canvas = this.$canvas;
+        const strokeStyle = this.styles.icon;
+
+        const ctx = $canvas.getContext('2d');
+        ctx.strokeStyle = strokeStyle;
+        ctx.lineWidth = 3;
+        
+        const p1 = this._rotate(-length, -length, rotationRadius);
+        const p3 = this._rotate(-length, length, rotationRadius);
+        ctx.beginPath();
+        ctx.moveTo(x + p1.x, y + p1.y);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x + p3.x, y + p3.y);
+        ctx.stroke();
+    }
+
+    drawRotationIcon(x, y, radiusX, radiusY, direction, arrowLength) {
+        const $canvas = this.$canvas;
+        const fillStyle = this.styles.icon;
+
+        const ctx = $canvas.getContext('2d');
+        ctx.fillStyle = fillStyle;
+        ctx.lineWidth = 3;
+    
+        ctx.beginPath();
+        if (!direction) {
+            ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2 * 3 / 4, false);
+            ctx.moveTo(x - arrowLength, y - radiusY - arrowLength);
+            ctx.lineTo(x, y - radiusY);
+            ctx.lineTo(x - arrowLength, y - radiusY + arrowLength);
+        } else {
+            ctx.ellipse(x, y, radiusX, radiusY, 0, Math.PI, Math.PI * 2 * 3 / 4, true);
+            ctx.moveTo(x + arrowLength, y - radiusY - arrowLength);
+            ctx.lineTo(x, y - radiusY);
+            ctx.lineTo(x + arrowLength, y - radiusY + arrowLength);
+        }
+        ctx.stroke();   
+    }
+
+    _rotate(x, y, theta) {
+        return {
+            x: Math.cos(theta) * x - Math.sin(theta) * y,
+            y: Math.sin(theta) * x + Math.cos(theta) * y
+        };
+    }
 }
 
-function drawJoyStickUI($canvas, center, circleFillStyle) {
-    const ctx = $canvas.getContext('2d');
-    const width = $canvas.width;
-    const height = $canvas.height;
-    const gradient = ctx.createRadialGradient(
-        center.x, center.y, 0,
-        center.x, center.y, width / 2,
-    );
-    gradient.addColorStop(0, circleFillStyle);
-    gradient.addColorStop(0.9, circleFillStyle);
-    gradient.addColorStop(1, 'white');
-    ctx.fillStyle = gradient;
 
-    ctx.clearRect(0, 0, width, height);
-    ctx.lineWidth = 1;
-
-    ctx.beginPath();
-    ctx.arc(center.x, center.y, width / 2, 0, Math.PI*2);
-    ctx.fill();
-}
-
-const COLOR = {
-    BG: 'rgba(66, 172, 203, 0.5)',
-    ICON: 'rgba(204, 49, 74, 0.8)',
-    CIRCLE: 'rgba(204, 49, 74, 0.3)'
-};
 
 
 
@@ -205,106 +271,46 @@ const COLOR = {
 /* 
  * The joystick controlling Z coordinates and rotations(R).
  */
-const zrJoyStickUI = new JoyStickUI({
-    selector: '#zrCanvas',
-    radius: 100
-});
-const $currentCoordinateZr = document.querySelector('#currentCoordinateZr');
+class ZrJoyStickUI extends JoyStickUI { // eslint-disable-line no-unused-vars
 
-function drawZrJoyStickUIBase(omitCircle) {
-    const $c = zrJoyStickUI.$canvas;
-    const _center = zrJoyStickUI.center;
+    constructor(params) {
+        super(params);
+    }
 
-    drawJoyStickUI($c, _center, COLOR.BG);
-    if (!omitCircle) {
-        drawCircle(
-            $c, _center, 
-            zrJoyStickUI.radius, zrJoyStickUI.radius * 0.4,
-            0, 0, COLOR.CIRCLE
+    drawBase(omitPointer) {
+        super.drawBase(omitPointer);
+
+        const iconDistanceFromCenter = this.radius * 0.75;
+        const center = this.center;
+
+        this.drawDirectionIcon(
+            center.x, center.y - iconDistanceFromCenter - 10,
+            10, -Math.PI / 2
+        );
+        this.drawDirectionIcon( 
+            center.x, center.y - iconDistanceFromCenter + 10,
+            10, -Math.PI / 2
+        );
+    
+        this.drawDirectionIcon(
+            center.x, center.y + iconDistanceFromCenter - 10,
+            10, Math.PI / 2
+        );
+        this.drawDirectionIcon(
+            center.x, center.y + iconDistanceFromCenter + 10,
+            10, Math.PI / 2
+        );
+    
+        this.drawRotationIcon(
+            center.x + iconDistanceFromCenter, center.y,
+            14, 7, false, 3
+        );
+        this.drawRotationIcon(
+            center.x - iconDistanceFromCenter, center.y,
+            14, 7, true, 3
         );
     }
-
-    const iconDistanceFromCenter = zrJoyStickUI.radius * 0.75;
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y - iconDistanceFromCenter - 10,
-        10, COLOR.ICON, -Math.PI / 2
-    );
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y - iconDistanceFromCenter + 10,
-        10, COLOR.ICON, -Math.PI / 2
-    );
-
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y + iconDistanceFromCenter - 10,
-        10, COLOR.ICON, Math.PI / 2
-    );
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y + iconDistanceFromCenter + 10,
-        10, COLOR.ICON, Math.PI / 2
-    );
-
-    drawRotationIcon(
-        $c,
-        _center.x + iconDistanceFromCenter, _center.y,
-        14, 7, false, 3, COLOR.ICON
-    );
-    drawRotationIcon(
-        $c,
-        _center.x - iconDistanceFromCenter, _center.y,
-        14, 7, true, 3, COLOR.ICON
-    );
 }
-
-function drawRotationIcon($canvas, x, y, radiusX, radiusY, direction, arrowLength, fillStyle) {
-    const ctx = $canvas.getContext('2d');
-    ctx.fillStyle = fillStyle;
-    ctx.lineWidth = 3;
-
-    ctx.beginPath();
-    if (!direction) {
-        ctx.ellipse(x, y, radiusX, radiusY, 0, 0, Math.PI * 2 * 3 / 4, false);
-        ctx.moveTo(x - arrowLength, y - radiusY - arrowLength);
-        ctx.lineTo(x, y - radiusY);
-        ctx.lineTo(x - arrowLength, y - radiusY + arrowLength);
-    } else {
-        ctx.ellipse(x, y, radiusX, radiusY, 0, Math.PI, Math.PI * 2 * 3 / 4, true);
-        ctx.moveTo(x + arrowLength, y - radiusY - arrowLength);
-        ctx.lineTo(x, y - radiusY);
-        ctx.lineTo(x + arrowLength, y - radiusY + arrowLength);
-    }
-    ctx.stroke();
-}
-
-zrJoyStickUI.onmove(data => {
-
-    const coords = data.coords;
-
-    drawZrJoyStickUIBase(true);
-
-    const coordX = coords.inUI.x;
-    const coordY = coords.inUI.y;
-
-    drawCircle(
-        zrJoyStickUI.$canvas,
-        zrJoyStickUI.center,
-        zrJoyStickUI.radius, zrJoyStickUI.radius * 0.4,
-        coordX, coordY, COLOR.CIRCLE
-    );
-    
-    const text = `z: ${round(coordY)}, r(deg):${round(180 * (coordX / zrJoyStickUI.radius))}`;
-    $currentCoordinateZr.textContent = text;
-
-});
-
-zrJoyStickUI.onend(() => {
-    drawZrJoyStickUIBase();
-    $currentCoordinateZr.textContent = '';
-});
-drawZrJoyStickUIBase();
 
 
 
@@ -318,84 +324,33 @@ drawZrJoyStickUIBase();
 /* 
  * The joystick controlling X,Y coordinates.
  */
-const xyJoyStickUI = new JoyStickUI({
-    selector: '#xyCanvas',
-    radius: 100
-});
-const $currentCoordinateXy = document.querySelector('#currentCoordinateXy');
+class XyJoyStickUI extends JoyStickUI { // eslint-disable-line no-unused-vars
 
-function drawXyJoyStickUIBase(omitCircle) {
-    const $c = xyJoyStickUI.$canvas;
-    const _center = xyJoyStickUI.center;
-
-    drawJoyStickUI($c, _center, COLOR.BG);
-
-    if (!omitCircle) {
-        drawCircle(
-            $c, _center, 
-            xyJoyStickUI.radius, xyJoyStickUI.radius * 0.4,
-            0, 0, COLOR.CIRCLE
-        );
+    constructor(params) {
+        super(params);
     }
 
-    const iconDistanceFromCenter = xyJoyStickUI.radius * 0.75;
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y - iconDistanceFromCenter,
-        12, COLOR.ICON, -Math.PI / 2
-    );
-    drawDirectionIcon(
-        $c, 
-        _center.x + iconDistanceFromCenter, _center.y,
-        12, COLOR.ICON
-    );
-    drawDirectionIcon(
-        $c, 
-        _center.x, _center.y + iconDistanceFromCenter,
-        12, COLOR.ICON, Math.PI / 2
-    );
-    drawDirectionIcon(
-        $c, 
-        _center.x - iconDistanceFromCenter, _center.y,
-        12, COLOR.ICON, Math.PI
-    );
+    drawBase(omitPointer) {
+        super.drawBase(omitPointer);
+
+        const iconDistanceFromCenter = this.radius * 0.75;
+        const center = this.center;
+
+        this.drawDirectionIcon(
+            center.x, center.y - iconDistanceFromCenter,
+            12, -Math.PI / 2
+        );
+        this.drawDirectionIcon(
+            center.x + iconDistanceFromCenter, center.y,
+            12, 0
+        );
+        this.drawDirectionIcon(
+            center.x, center.y + iconDistanceFromCenter,
+            12, Math.PI / 2
+        );
+        this.drawDirectionIcon(
+            center.x - iconDistanceFromCenter, center.y,
+            12, Math.PI
+        );
+    }
 }
-
-function drawDirectionIcon($canvas, x, y, length, strokeStyle, rotationRadius = 0) {
-    const ctx = $canvas.getContext('2d');
-    ctx.strokeStyle = strokeStyle;
-    ctx.lineWidth = 3;
-    
-    const p1 = rotate(-length, -length, rotationRadius);
-    const p3 = rotate(-length, length, rotationRadius);
-    ctx.beginPath();
-    ctx.moveTo(x + p1.x, y + p1.y);
-    ctx.lineTo(x, y);
-    ctx.lineTo(x + p3.x, y + p3.y);
-    ctx.stroke();
-}
-
-xyJoyStickUI.onmove(data => {
-
-    const coords = data.coords;
-    const coordX = coords.inUI.x;
-    const coordY = coords.inUI.y;
-
-    drawXyJoyStickUIBase(true);
-    drawCircle(
-        xyJoyStickUI.$canvas,
-        xyJoyStickUI.center,
-        xyJoyStickUI.radius, xyJoyStickUI.radius * 0.4,
-        coordX, coordY, COLOR.CIRCLE
-    );
-    
-    const text = `x: ${round(coordX)}, y:${round(coordY)}`;
-    $currentCoordinateXy.textContent = text;
-
-});
-
-xyJoyStickUI.onend(() => {
-    drawXyJoyStickUIBase();
-    $currentCoordinateXy.textContent = '';
-});
-drawXyJoyStickUIBase();
