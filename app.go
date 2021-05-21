@@ -172,7 +172,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate1M)
 							changeTo = 1
 						}
-						log.Printf("ReceiverEstimation = %.2f MB. Changes to %v MB", bitrateMB, changeTo)
+						log.Printf("ReceiverEstimation = %.2f MB. The bit rate changes to %v MB", bitrateMB, changeTo)
 					}
 				}
 			}
@@ -277,5 +277,6 @@ func main() {
 	http.HandleFunc("/moveXy", moveXy)
 	http.HandleFunc("/moveZr", moveZr)
 
+	log.Println("Start the application.")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

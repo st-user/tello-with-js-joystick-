@@ -1,4 +1,4 @@
-module github.com/st-user/tello-with-js-joystick
+module github.com/st-user/tello-with-js-joystick-
 
 go 1.16
 

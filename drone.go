@@ -55,6 +55,8 @@ func (d *MyDrone) Start(channels *Channels) {
 			}
 		})
 
+		// Thanks to [oliverpool/tello-webrtc-fpv](https://github.com/oliverpool/tello-webrtc-fpv)
+		// I was able to figure out the timing at which h264 packets should be send to a browser.
 		var buf []byte
 		isNalUnitStart := func(b []byte) bool {
 			return len(b) > 3 && b[0] == 0 && b[1] == 0 && b[2] == 0 && b[3] == 1
