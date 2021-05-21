@@ -1,6 +1,6 @@
-# tello-with-js-joystick-
+# tello-with-js-joystick (& video controlled with RTCP)
 
-A web application for controlling [Tello/Tello EDU](https://www.ryzerobotics.com/jp/tello) on a browser by a UI emulating joysticks.
+A web application for controlling [Tello/Tello EDU](https://www.ryzerobotics.com/jp/tello) on a browser by a UI emulating joysticks. Video streaming is controlled with **RTCP**.
 
 This application written in [GO language](https://golang.org/)(server side) and pure javascript/html/css(client side).
 The video streaming is achieved using WebRTC.
