@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"gobot.io/x/gobot"
@@ -32,7 +33,7 @@ func (d *MyDrone) Start(channels *Channels) {
 			return
 		}
 
-		drone = tello.NewDriverWithIP("192.168.10.1", "8888")
+		drone = tello.NewDriver("8888")
 		d.Driver = drone
 
 		drone.On(tello.ConnectedEvent, func(data interface{}) {
@@ -99,18 +100,34 @@ func (d *MyDrone) Start(channels *Channels) {
 	<-waitUntilConnected
 }
 
+// In case of losing a stop signal (i.e '{ x: 0, y: 0 }' or '{ r: 0, z: 0 }') for some reason,
+// if no signal is received during 500ms, a stop signal is set automatically
 type SafetySignal struct {
 	isStarted             bool
 	endChannel            chan struct{}
 	lastAccessedTimestamp time.Time
+	mutex                 sync.Mutex
 }
 
 func NewSafetySignal() SafetySignal {
 	return SafetySignal{}
 }
 
+func (s *SafetySignal) ConsumeSignal(x float32, y float32, drone *MyDrone) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.startChecking(drone)
+
+	if x == 0 && y == 0 {
+		s.endChecking()
+		return
+	}
+	s.lastAccessedTimestamp = time.Now()
+}
+
 // TODO use mutex
-func (s *SafetySignal) StartChecking(drone *MyDrone) {
+func (s *SafetySignal) startChecking(drone *MyDrone) {
 	if s.isStarted {
 		return
 	}
@@ -128,7 +145,10 @@ func (s *SafetySignal) StartChecking(drone *MyDrone) {
 				return
 			case <-ticker.C:
 				if 500 < time.Since(s.lastAccessedTimestamp).Milliseconds() {
-					log.Println("Set a zero translation vector because of losting stop signals.")
+					s.mutex.Lock()
+					defer s.mutex.Unlock()
+
+					log.Println("Set a zero translation vector because of losing a stop signal.")
 					drone.Driver.SetVector(0, 0, 0, 0)
 					s.endChecking()
 					return
@@ -136,14 +156,6 @@ func (s *SafetySignal) StartChecking(drone *MyDrone) {
 			}
 		}
 	}()
-}
-
-func (s *SafetySignal) ConsumeSignal(x float32, y float32) {
-	if x == 0 && y == 0 {
-		s.endChecking()
-		return
-	}
-	s.lastAccessedTimestamp = time.Now()
 }
 
 func (s *SafetySignal) endChecking() {

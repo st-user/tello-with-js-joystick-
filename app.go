@@ -141,8 +141,6 @@ func offer(w http.ResponseWriter, r *http.Request) {
 				for _, pkt := range pkts {
 					var _p interface{} = pkt
 
-					// log.Printf(" -----  %T %v", _p, _p)
-
 					switch _pkt := _p.(type) {
 					case *rtcp.PictureLossIndication:
 						log.Printf("Receives RTCP PictureLossIndication. %v", _pkt)
@@ -150,8 +148,10 @@ func offer(w http.ResponseWriter, r *http.Request) {
 
 					case *rtcp.ReceiverEstimatedMaximumBitrate:
 						log.Printf("Receives RTCP ReceiverEstimatedMaximumBitrate. %v", _pkt)
-						// Reference: github.com/pion/rtcp receiver_estimated_maximum_bitrate.go
 						bitrate := float64(_pkt.Bitrate)
+
+						// Using the bitrate(MB) value corresponding to the one that 'rtcp.Receiver Estimated Maximum Bitrate.String()' shows.
+						// Reference: github.com/pion/rtcp receiver_estimated_maximum_bitrate.go
 						bitrateMB := bitrate / 1000.0 / 1000.0 // :MB
 						var changeTo float64
 
@@ -183,7 +183,6 @@ func offer(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Connection State has changed %s \n", connectionState.String())
 	})
 
-	log.Println(offerSdp)
 	err = rtcPeerConnection.SetRemoteDescription(offerSdp)
 	if err != nil {
 		writeErr(err)
@@ -238,10 +237,7 @@ func moveXy(w http.ResponseWriter, r *http.Request) {
 		droneX := xy["y"]
 		droneY := xy["x"]
 
-		safetySignal.StartChecking(&drone)
-		safetySignal.ConsumeSignal(droneX, droneY)
-
-		// log.Printf("%v, %v", droneX, droneY)
+		safetySignal.ConsumeSignal(droneX, droneY, &drone)
 
 		_, _, z, psi := drone.Driver.Vector()
 		drone.Driver.SetVector(droneX, droneY, z, psi)
@@ -256,10 +252,7 @@ func moveZr(w http.ResponseWriter, r *http.Request) {
 		droneZ := zr["z"]
 		droneR := zr["r"]
 
-		safetySignal.StartChecking(&drone)
-		safetySignal.ConsumeSignal(droneZ, droneR)
-
-		// log.Printf("%v, %v", droneZ, droneR)
+		safetySignal.ConsumeSignal(droneZ, droneR, &drone)
 
 		x, y, _, _ := drone.Driver.Vector()
 		drone.Driver.SetVector(x, y, droneZ, droneR)
