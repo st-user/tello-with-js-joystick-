@@ -13,13 +13,12 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 	"github.com/pion/webrtc/v3/pkg/media"
-	"gobot.io/x/gobot"
 	"gobot.io/x/gobot/platforms/dji/tello"
 )
 
-var drone *tello.Driver
-var videoFrameChannel chan []byte
-var rtcEventLoopStopChannel chan struct{}
+var drone MyDrone
+var safetySignal SafetySignal
+var channels Channels
 
 func loadFileByName(filename string) string {
 	path := filepath.Join("client", "static", filename)
@@ -36,7 +35,7 @@ func loadFile(r *http.Request) string {
 }
 
 func checkThenAct(w http.ResponseWriter, actFunc func()) {
-	if drone == nil {
+	if !drone.isInitialized() {
 		log.Println("Your drone has not been initialized yet.")
 		w.WriteHeader(500)
 		return
@@ -45,94 +44,29 @@ func checkThenAct(w http.ResponseWriter, actFunc func()) {
 }
 
 func connect(w http.ResponseWriter, r *http.Request) {
-
-	go func() {
-
-		if drone != nil {
-			log.Println("Your drone has already been initialized.")
-			return
-		}
-
-		drone = tello.NewDriverWithIP("192.168.10.1", "8888")
-		drone.On(tello.ConnectedEvent, func(data interface{}) {
-			fmt.Println("Starts receiving video frames from your drone.")
-			drone.StartVideo()
-			drone.SetVideoEncoderRate(tello.VideoBitRate4M)
-			gobot.Every(10*time.Second, func() {
-				drone.StartVideo()
-			})
-		})
-
-		lastLoggedTime := time.Now()
-		drone.On(tello.FlightDataEvent, func(data interface{}) {
-			if 3 < time.Since(lastLoggedTime).Seconds() {
-				fd := data.(*tello.FlightData)
-				log.Printf("Battery level %v%%", fd.BatteryPercentage)
-				lastLoggedTime = time.Now()
-			}
-		})
-
-		var buf []byte
-		isNalUnitStart := func(b []byte) bool {
-			return len(b) > 3 && b[0] == 0 && b[1] == 0 && b[2] == 0 && b[3] == 1
-		}
-
-		sendPreviousBytes := func(b []byte) bool {
-			return len(b) > 4 && (b[4]&0b11111 == 7 || b[4]&0b11111 == 1)
-		}
-
-		loggedRecoverCount := 0
-		handleData := func(_data interface{}) {
-
-			defer func() {
-				if r := recover(); r != nil {
-					if loggedRecoverCount%100 == 0 {
-						log.Printf("Ignores panic. %v", r)
-						loggedRecoverCount = 0
-					}
-					loggedRecoverCount++
-				}
-			}()
-
-			data := _data.([]byte)
-
-			if !isNalUnitStart(data) || !sendPreviousBytes(data) {
-				buf = append(buf, data...)
-				return
-			} else {
-				if videoFrameChannel != nil {
-					videoFrameChannel <- buf
-				}
-				var zero []byte
-				buf = append(zero, data...)
-			}
-
-		}
-		drone.On(tello.VideoFrameEvent, handleData)
-		robot := gobot.NewRobot(
-			[]gobot.Connection{},
-			[]gobot.Device{drone},
-		)
-		robot.Start()
-	}()
+	if drone.isInitialized() {
+		log.Println("Your drone has already been initialized.")
+		return
+	}
+	drone.Start(&channels)
 }
 
 func takeoff(w http.ResponseWriter, r *http.Request) {
 	checkThenAct(w, func() {
-		drone.TakeOff()
+		drone.Driver.TakeOff()
 	})
 }
 
 func land(w http.ResponseWriter, r *http.Request) {
 	checkThenAct(w, func() {
-		drone.Land()
+		drone.Driver.Land()
 	})
 }
 
 func disconnect(w http.ResponseWriter, r *http.Request) {
 	checkThenAct(w, func() {
 
-		drone.Land()
+		drone.Driver.Land()
 		time.Sleep(1 * time.Second)
 
 		log.Printf("Halts the entire application.")
@@ -147,8 +81,7 @@ func disconnect(w http.ResponseWriter, r *http.Request) {
 
 func offer(w http.ResponseWriter, r *http.Request) {
 
-	videoFrameChannel = make(chan []byte)
-	rtcEventLoopStopChannel = make(chan struct{})
+	channels.Init()
 
 	offerSdp := webrtc.SessionDescription{}
 	err := json.NewDecoder(r.Body).Decode(&offerSdp)
@@ -181,7 +114,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 		rtcpBuf := make([]byte, 1500)
 
 		select {
-		case <-rtcEventLoopStopChannel:
+		case <-channels.RtcEventLoopStopChannel:
 			log.Println("Stops WebRTC event loop.")
 			return
 		default:
@@ -213,7 +146,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 					switch _pkt := _p.(type) {
 					case *rtcp.PictureLossIndication:
 						log.Printf("Receives RTCP PictureLossIndication. %v", _pkt)
-						drone.StartVideo()
+						drone.Driver.StartVideo()
 
 					case *rtcp.ReceiverEstimatedMaximumBitrate:
 						log.Printf("Receives RTCP ReceiverEstimatedMaximumBitrate. %v", _pkt)
@@ -224,22 +157,22 @@ func offer(w http.ResponseWriter, r *http.Request) {
 
 						switch {
 						case bitrateMB >= 4.0:
-							drone.SetVideoEncoderRate(tello.VideoBitRate4M)
+							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate4M)
 							changeTo = 4.0
 						case bitrateMB >= 3.0:
-							drone.SetVideoEncoderRate(tello.VideoBitRate3M)
+							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate3M)
 							changeTo = 3.0
 						case bitrateMB >= 2.0:
-							drone.SetVideoEncoderRate(tello.VideoBitRate2M)
+							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate2M)
 							changeTo = 2.0
 						case bitrateMB >= 1.5:
-							drone.SetVideoEncoderRate(tello.VideoBitRate15M)
+							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate15M)
 							changeTo = 1.5
 						default:
-							drone.SetVideoEncoderRate(tello.VideoBitRate1M)
+							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate1M)
 							changeTo = 1
 						}
-						log.Printf("ReceiverEstimation = %.2f MB. Change to %v MB", bitrateMB, changeTo)
+						log.Printf("ReceiverEstimation = %.2f MB. Changes to %v MB", bitrateMB, changeTo)
 					}
 				}
 			}
@@ -272,7 +205,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 
 		for {
 
-			frame, ok := <-videoFrameChannel
+			frame, ok := <-channels.VideoFrameChannel
 			if !ok {
 				rtcPeerConnection.Close()
 				log.Println("The channel for video frames is closed.")
@@ -294,8 +227,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 }
 
 func videoOff(w http.ResponseWriter, r *http.Request) {
-	close(videoFrameChannel)
-	close(rtcEventLoopStopChannel)
+	channels.VideoOff()
 }
 
 func moveXy(w http.ResponseWriter, r *http.Request) {
@@ -306,10 +238,13 @@ func moveXy(w http.ResponseWriter, r *http.Request) {
 		droneX := xy["y"]
 		droneY := xy["x"]
 
+		safetySignal.StartChecking(&drone)
+		safetySignal.ConsumeSignal(droneX, droneY)
+
 		// log.Printf("%v, %v", droneX, droneY)
 
-		_, _, z, psi := drone.Vector()
-		drone.SetVector(droneX, droneY, z, psi)
+		_, _, z, psi := drone.Driver.Vector()
+		drone.Driver.SetVector(droneX, droneY, z, psi)
 	})
 }
 
@@ -321,14 +256,21 @@ func moveZr(w http.ResponseWriter, r *http.Request) {
 		droneZ := zr["z"]
 		droneR := zr["r"]
 
+		safetySignal.StartChecking(&drone)
+		safetySignal.ConsumeSignal(droneZ, droneR)
+
 		// log.Printf("%v, %v", droneZ, droneR)
 
-		x, y, _, _ := drone.Vector()
-		drone.SetVector(x, y, droneZ, droneR)
+		x, y, _, _ := drone.Driver.Vector()
+		drone.Driver.SetVector(x, y, droneZ, droneR)
 	})
 }
 
 func main() {
+
+	drone = NewMyDrone()
+	safetySignal = NewSafetySignal()
+	channels = NewChannels()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, loadFile(r))

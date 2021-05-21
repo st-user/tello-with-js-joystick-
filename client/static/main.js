@@ -40,7 +40,7 @@ $disconnect.addEventListener('click', async event => {
         return;
     }
 
-    let msg = 'Server application process is killed and stop when \'yes/ok\' is selected.';
+    let msg = 'The drone lands and server application process is killed and stop when \'yes/ok\' is selected.';
     msg += 'If you want to connect the application again, ';
     msg += 'please start the server application manually and reload this page.';
 
@@ -266,7 +266,7 @@ function createPeerConnection() {
             display($videoContainer, true);
             $video.onloadedmetadata = () => {
                 resizeVideo();
-                console.debug('Video metadata loaded.')
+                console.debug('Video metadata loaded.');
             };
             $video.srcObject = event.streams[0];
         }          
