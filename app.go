@@ -139,9 +139,8 @@ func offer(w http.ResponseWriter, r *http.Request) {
 				}
 
 				for _, pkt := range pkts {
-					var _p interface{} = pkt
 
-					switch _pkt := _p.(type) {
+					switch _pkt := pkt.(type) {
 					case *rtcp.PictureLossIndication:
 						log.Printf("Receives RTCP PictureLossIndication. %v", _pkt)
 						drone.Driver.StartVideo()
@@ -172,7 +171,7 @@ func offer(w http.ResponseWriter, r *http.Request) {
 							drone.Driver.SetVideoEncoderRate(tello.VideoBitRate1M)
 							changeTo = 1
 						}
-						log.Printf("ReceiverEstimation = %.2f MB. The bit rate changes to %v MB", bitrateMB, changeTo)
+						log.Printf("ReceiverEstimation = %.2f Mb/s. The bit rate changes to %v Mb/s", bitrateMB, changeTo)
 					}
 				}
 			}

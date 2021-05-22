@@ -91,7 +91,6 @@ class JoyStickUI {
        
                 coordX = _x;
                 coordY = _y;
-                distance = Math.sqrt(coordX*coordX + coordY*coordY);
             }
         
             self.drawBase(true);
