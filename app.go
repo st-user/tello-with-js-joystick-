@@ -125,13 +125,6 @@ func offer(w http.ResponseWriter, r *http.Request) {
 				}
 				rtcpPacket := rtcpBuf[:n]
 
-				/*
-					payloadType := rtcpPacket[1]
-					if payloadType == 206 {
-						log.Printf("rtcp detail %v %v", pkts, rtcpPacket)
-						// 'R' 'E' 'M' 'B' = 82 69 77 66
-					}*/
-
 				pkts, err := rtcp.Unmarshal(rtcpPacket)
 				if err != nil {
 					log.Println(err)
