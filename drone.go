@@ -28,11 +28,6 @@ func (d *MyDrone) Start(channels *Channels) {
 	var drone *tello.Driver
 	go func() {
 
-		if drone != nil {
-			log.Println("Your drone has already been initialized.")
-			return
-		}
-
 		drone = tello.NewDriver("8888")
 		d.Driver = drone
 
